@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { cn, formatRupiah } from '@/lib/utils';
+import * as XLSX from 'xlsx';
 import { 
   LayoutDashboard, 
   Wallet, 
@@ -10,12 +11,23 @@ import {
   ArrowUpRight,
   TrendingUp,
   CreditCard,
-  PiggyBank
+  PiggyBank,
+  Users,
+  Download,
+  Upload,
+  FileSpreadsheet
 } from 'lucide-react';
 
 // --- Types ---
 
 type TransactionType = 'POKOK' | 'WAJIB' | 'SUKARELA';
+
+interface Member {
+  id: string;
+  memberNo: string;
+  fullName: string;
+  joinDate: string; // ISO string
+}
 
 interface Transaction {
   id: string;
@@ -32,6 +44,7 @@ interface SavingsData {
   wajib: number;
   sukarela: number;
   transactions: Transaction[];
+  members: Member[];
 }
 
 const INITIAL_DATA: SavingsData = {
@@ -39,6 +52,7 @@ const INITIAL_DATA: SavingsData = {
   wajib: 0,
   sukarela: 0,
   transactions: [],
+  members: [],
 };
 
 // --- Components ---
@@ -88,16 +102,20 @@ function StatCard({
 // --- Main Page ---
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'deposit' | 'history'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'deposit' | 'history' | 'members'>('dashboard');
   const [data, setData] = useState<SavingsData>(INITIAL_DATA);
   const [isLoaded, setIsLoaded] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Load data from localStorage
   useEffect(() => {
     const saved = localStorage.getItem('koperasi-data');
     if (saved) {
       try {
-        setData(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        // Migration/Safety check for new fields
+        if (!parsed.members) parsed.members = [];
+        setData(parsed);
       } catch (e) {
         console.error("Failed to parse data", e);
       }
@@ -125,11 +143,53 @@ export default function Home() {
 
     setData(prev => ({
       ...prev,
-      [type.toLowerCase()]: prev[type.toLowerCase() as keyof Omit<SavingsData, 'transactions'>] + amount,
+      [type.toLowerCase()]: prev[type.toLowerCase() as keyof Omit<SavingsData, 'transactions' | 'members'>] + amount,
       transactions: [newTransaction, ...prev.transactions],
     }));
 
     setActiveTab('dashboard');
+  };
+
+  const handleExportMembers = () => {
+    const ws = XLSX.utils.json_to_sheet(data.members.map(m => ({
+      'No. Anggota': m.memberNo,
+      'Nama Lengkap': m.fullName,
+      'Tanggal Bergabung': new Date(m.joinDate).toLocaleDateString('id-ID')
+    })));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Anggota");
+    XLSX.writeFile(wb, "data-anggota-koperasi.xlsx");
+  };
+
+  const handleImportMembers = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const bstr = evt.target?.result;
+      const wb = XLSX.read(bstr, { type: 'binary' });
+      const wsname = wb.SheetNames[0];
+      const ws = wb.Sheets[wsname];
+      const jsonData = XLSX.utils.sheet_to_json(ws) as any[];
+
+      const newMembers: Member[] = jsonData.map((row: any) => ({
+        id: crypto.randomUUID(),
+        memberNo: row['No. Anggota'] || row['No'] || `M-${Math.floor(Math.random() * 1000)}`,
+        fullName: row['Nama Lengkap'] || row['Nama'],
+        joinDate: new Date().toISOString() // Default to now if not present
+      })).filter(m => m.fullName); // Simple validation
+
+      setData(prev => ({
+        ...prev,
+        members: [...prev.members, ...newMembers]
+      }));
+      
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      alert(`Berhasil mengimpor ${newMembers.length} anggota.`);
+    };
+    reader.readAsBinaryString(file);
   };
 
   if (!isLoaded) return null; // or a loading spinner
@@ -162,6 +222,18 @@ export default function Home() {
             >
               <LayoutDashboard className="w-5 h-5 mr-3" />
               Dashboard
+            </button>
+            <button
+              onClick={() => setActiveTab('members')}
+              className={cn(
+                "flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                activeTab === 'members' 
+                  ? "bg-blue-50 text-blue-700" 
+                  : "text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              <Users className="w-5 h-5 mr-3" />
+              Anggota Koperasi
             </button>
             <button
               onClick={() => setActiveTab('deposit')}
@@ -404,6 +476,89 @@ export default function Home() {
                       </table>
                     </div>
                   </Card>
+              </div>
+            )}
+
+            {activeTab === 'members' && (
+              <div className="space-y-6">
+                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                   <div className="flex items-center">
+                    <button 
+                      onClick={() => setActiveTab('dashboard')}
+                      className="mr-4 p-2 hover:bg-gray-100 rounded-full md:hidden"
+                    >
+                      ←
+                    </button>
+                    <h1 className="text-2xl font-bold text-gray-900">Data Anggota Koperasi</h1>
+                  </div>
+                  <div className="flex gap-2 w-full md:w-auto">
+                    <button 
+                      onClick={() => fileInputRef.current?.click()}
+                      className="flex-1 md:flex-none flex items-center justify-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <Upload className="w-4 h-4 mr-2" />
+                      Import Excel
+                    </button>
+                    <input 
+                      type="file" 
+                      ref={fileInputRef} 
+                      onChange={handleImportMembers} 
+                      accept=".xlsx, .xls" 
+                      className="hidden" 
+                    />
+                    <button 
+                      onClick={handleExportMembers}
+                      className="flex-1 md:flex-none flex items-center justify-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Export Excel
+                    </button>
+                  </div>
+                </div>
+
+                <Card className="overflow-hidden p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-sm text-gray-600">
+                        <thead className="bg-gray-50 text-gray-900 font-medium border-b border-gray-100">
+                          <tr>
+                            <th className="px-6 py-4">No. Anggota</th>
+                            <th className="px-6 py-4">Nama Lengkap</th>
+                            <th className="px-6 py-4">Tanggal Bergabung</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100">
+                          {data.members.length === 0 ? (
+                            <tr>
+                              <td colSpan={3} className="px-6 py-8 text-center text-gray-500">
+                                Belum ada data anggota. Silakan import data dari Excel.
+                              </td>
+                            </tr>
+                          ) : (
+                            data.members.map((m) => (
+                              <tr key={m.id} className="hover:bg-gray-50 transition-colors">
+                                <td className="px-6 py-4 font-medium text-gray-900">{m.memberNo}</td>
+                                <td className="px-6 py-4">{m.fullName}</td>
+                                <td className="px-6 py-4">
+                                  {new Date(m.joinDate).toLocaleDateString('id-ID', {
+                                    day: 'numeric', month: 'long', year: 'numeric'
+                                  })}
+                                </td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card>
+                  
+                  <div className="bg-blue-50 p-4 rounded-lg border border-blue-100 text-sm text-blue-800 flex items-start">
+                    <FileSpreadsheet className="w-5 h-5 mr-3 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-semibold mb-1">Format Import Excel:</p>
+                      <p>Pastikan file Excel memiliki header kolom: <strong>No. Anggota</strong>, <strong>Nama Lengkap</strong>.</p>
+                      <p className="mt-1 text-blue-600 text-xs">Kolom opsional: Tanggal Bergabung (jika kosong akan menggunakan tanggal hari ini).</p>
+                    </div>
+                  </div>
               </div>
             )}
           </div>
