@@ -252,13 +252,26 @@ export default function Home() {
   };
 
   const handleDownloadTemplate = () => {
-    const ws = XLSX.utils.json_to_sheet([
-      { 'No. Anggota': 'KOP-001', 'Nama Lengkap': 'John Doe', 'Tanggal Bergabung': '2024-01-01' },
-      { 'No. Anggota': 'KOP-002', 'Nama Lengkap': 'Jane Smith', 'Tanggal Bergabung': '2024-02-15' }
+    // Define headers
+    const headers = ['No. Anggota', 'Nama Lengkap', 'Tanggal Bergabung'];
+    
+    // Create worksheet
+    const ws = XLSX.utils.aoa_to_sheet([
+      headers,
+      ['KOP-001', 'John Doe', '2024-01-01'],
+      ['KOP-002', 'Jane Smith', '2024-02-15']
     ]);
+    
+    // Set column widths
+    ws['!cols'] = [
+      { wch: 15 }, // No. Anggota
+      { wch: 30 }, // Nama Lengkap
+      { wch: 20 }  // Tanggal Bergabung
+    ];
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Template");
-    XLSX.writeFile(wb, "template-anggota-v4.xlsx");
+    XLSX.writeFile(wb, "template-anggota-baru.xlsx");
   };
 
   const handlePrintReceipt = (transaction: Transaction) => {
