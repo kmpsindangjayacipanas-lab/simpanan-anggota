@@ -349,7 +349,7 @@ export default function Home() {
     <div className="min-h-screen bg-gray-50 font-sans text-gray-900">
       {/* DEBUG BANNER - DELETE LATER */}
       <div className="bg-red-600 text-white text-center py-2 px-4 font-bold">
-        DEBUG MODE: VERSI TERBARU (Updated {new Date().toLocaleTimeString()}) - Cek Template Excel Sekarang
+        DEBUG MODE: Menggunakan Database 'simpanan' - Pastikan Environment Variable ada di Vercel!
       </div>
       
       {/* Sidebar / Navigation */}

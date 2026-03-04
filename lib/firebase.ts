@@ -18,6 +18,9 @@ console.log("Firebase Config (Partial):", {
 
 // Initialize Firebase
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-const db = getFirestore(app);
+
+// Connect to the specific database 'simpanan' (or '(default)' if not using a named DB)
+// User provided URL: .../databases/simpanan/data
+const db = getFirestore(app, 'simpanan'); 
 
 export { db };
