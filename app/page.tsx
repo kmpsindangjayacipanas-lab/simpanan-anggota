@@ -795,6 +795,33 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
   const [periodMonth, setPeriodMonth] = useState(new Date().getMonth() + 1);
   const [periodYear, setPeriodYear] = useState(new Date().getFullYear());
   const [selectedMemberId, setSelectedMemberId] = useState('');
+  const [hasPaidPokok, setHasPaidPokok] = useState(false);
+  const [paidMonths, setPaidMonths] = useState<number[]>([]);
+
+  // Check payment status when member or year changes
+  useEffect(() => {
+    if (!selectedMemberId) {
+      setHasPaidPokok(false);
+      setPaidMonths([]);
+      return;
+    }
+
+    // Check Pokok
+    const isPokokPaid = transactions.some(t => t.memberId === selectedMemberId && t.type === 'POKOK');
+    setHasPaidPokok(isPokokPaid);
+    
+    // If Pokok is paid and currently selected, switch to Wajib
+    if (isPokokPaid && type === 'POKOK') {
+      setType('WAJIB');
+    }
+
+    // Check Wajib for selected year
+    const paidWajibMonths = transactions
+      .filter(t => t.memberId === selectedMemberId && t.type === 'WAJIB' && t.periodYear === periodYear)
+      .map(t => t.periodMonth);
+    setPaidMonths(paidWajibMonths);
+
+  }, [selectedMemberId, transactions, periodYear, type]);
 
   // Set default amounts
   useEffect(() => {
@@ -894,14 +921,17 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
                 key={t}
                 type="button"
                 onClick={() => setType(t)}
+                disabled={t === 'POKOK' && hasPaidPokok}
                 className={cn(
                   "py-2 px-4 rounded-lg text-sm font-medium border transition-all",
                   type === t 
                     ? "border-blue-600 bg-blue-50 text-blue-700 ring-2 ring-blue-100" 
-                    : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    : "border-gray-200 text-gray-600 hover:border-gray-300",
+                  t === 'POKOK' && hasPaidPokok && "opacity-50 cursor-not-allowed bg-gray-100 text-gray-400 border-gray-200 hover:border-gray-200"
                 )}
               >
                 Simpanan {t.charAt(0) + t.slice(1).toLowerCase()}
+                {t === 'POKOK' && hasPaidPokok && " (Lunas)"}
               </button>
             ))}
           </div>
@@ -916,9 +946,14 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
                 onChange={(e) => setPeriodMonth(parseInt(e.target.value))}
                 className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
               >
-                {months.map((m, i) => (
-                  <option key={i} value={i + 1}>{m}</option>
-                ))}
+                {months.map((m, i) => {
+                  const isPaid = paidMonths.includes(i + 1);
+                  return (
+                    <option key={i} value={i + 1} disabled={isPaid && type === 'WAJIB'}>
+                      {m} {isPaid && type === 'WAJIB' ? '(Lunas)' : ''}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div>
