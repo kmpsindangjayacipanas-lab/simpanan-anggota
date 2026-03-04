@@ -42,6 +42,8 @@ interface Transaction {
   periodMonth: number;
   periodYear: number;
   note?: string;
+  memberId?: string;
+  memberName?: string;
 }
 
 interface SavingsData {
@@ -107,7 +109,7 @@ function StatCard({
 // --- Main Page ---
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'deposit' | 'history' | 'members'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'deposit' | 'history' | 'members' | 'rekap'>('dashboard');
   const [data, setData] = useState<SavingsData>(INITIAL_DATA);
   const [isLoaded, setIsLoaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -160,7 +162,7 @@ export default function Home() {
     };
   }, []);
 
-  const handleDeposit = async (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string) => {
+  const handleDeposit = async (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string, memberId: string, memberName: string) => {
     try {
       await addDoc(collection(db, 'transactions'), {
         date: new Date().toISOString(),
@@ -169,6 +171,8 @@ export default function Home() {
         periodMonth,
         periodYear,
         note,
+        memberId,
+        memberName
       });
       setActiveTab('dashboard');
       alert('Simpanan berhasil disimpan!');
@@ -309,6 +313,10 @@ export default function Home() {
                 <span class="label">Tanggal:</span>
                 <span>${new Date(transaction.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
               </div>
+               <div class="row">
+                <span class="label">Anggota:</span>
+                <span>${transaction.memberName || '-'}</span>
+              </div>
               <div class="row">
                 <span class="label">Jenis Simpanan:</span>
                 <span>${transaction.type}</span>
@@ -413,6 +421,18 @@ export default function Home() {
               <History className="w-5 h-5 mr-3" />
               Riwayat Transaksi
             </button>
+             <button
+              onClick={() => setActiveTab('rekap')}
+              className={cn(
+                "flex items-center w-full px-4 py-3 rounded-lg text-sm font-medium transition-colors",
+                activeTab === 'rekap' 
+                  ? "bg-blue-50 text-blue-700" 
+                  : "text-gray-600 hover:bg-gray-50"
+              )}
+            >
+              <FileSpreadsheet className="w-5 h-5 mr-3" />
+              Rekap Pembayaran
+            </button>
           </nav>
 
           <div className="p-4 border-t border-gray-100">
@@ -423,7 +443,7 @@ export default function Home() {
               <div>
                 <p className="text-sm font-medium text-gray-900">Anggota Koperasi</p>
                 <p className="text-xs text-gray-500">ID: KOP-2024-001</p>
-                <p className="text-[10px] text-gray-400 mt-1">v1.0.5 (Firebase)</p>
+                <p className="text-[10px] text-gray-400 mt-1">v1.1.0 (Firebase)</p>
               </div>
             </div>
           </div>
@@ -499,9 +519,9 @@ export default function Home() {
                         <thead className="bg-gray-50 text-gray-900 font-medium border-b border-gray-100">
                           <tr>
                             <th className="px-6 py-4">Tanggal</th>
+                            <th className="px-6 py-4">Anggota</th>
                             <th className="px-6 py-4">Jenis</th>
                             <th className="px-6 py-4">Periode</th>
-                            <th className="px-6 py-4">Keterangan</th>
                             <th className="px-6 py-4 text-right">Jumlah</th>
                             <th className="px-6 py-4 text-center">Aksi</th>
                           </tr>
@@ -521,6 +541,7 @@ export default function Home() {
                                     day: 'numeric', month: 'long', year: 'numeric'
                                   })}
                                 </td>
+                                <td className="px-6 py-4 font-medium">{t.memberName || '-'}</td>
                                 <td className="px-6 py-4">
                                   <span className={cn(
                                     "px-2.5 py-1 rounded-full text-xs font-medium",
@@ -536,7 +557,6 @@ export default function Home() {
                                     ? new Date(t.periodYear, t.periodMonth - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
                                     : '-'}
                                 </td>
-                                <td className="px-6 py-4">{t.note || '-'}</td>
                                 <td className="px-6 py-4 text-right font-medium text-gray-900">
                                   + {formatRupiah(t.amount)}
                                 </td>
@@ -572,7 +592,7 @@ export default function Home() {
                   <h1 className="text-2xl font-bold text-gray-900">Setor Simpanan Baru</h1>
                 </div>
                 
-                <DepositForm onDeposit={handleDeposit} />
+                <DepositForm onDeposit={handleDeposit} members={data.members} />
               </div>
             )}
 
@@ -594,6 +614,7 @@ export default function Home() {
                         <thead className="bg-gray-50 text-gray-900 font-medium border-b border-gray-100">
                           <tr>
                             <th className="px-6 py-4">Tanggal</th>
+                            <th className="px-6 py-4">Anggota</th>
                             <th className="px-6 py-4">Jenis</th>
                             <th className="px-6 py-4">Periode</th>
                             <th className="px-6 py-4">Keterangan</th>
@@ -604,7 +625,7 @@ export default function Home() {
                         <tbody className="divide-y divide-gray-100">
                           {data.transactions.length === 0 ? (
                             <tr>
-                              <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                              <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                                 Belum ada transaksi
                               </td>
                             </tr>
@@ -616,6 +637,7 @@ export default function Home() {
                                     day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit'
                                   })}
                                 </td>
+                                <td className="px-6 py-4 font-medium">{t.memberName || '-'}</td>
                                 <td className="px-6 py-4">
                                   <span className={cn(
                                     "px-2.5 py-1 rounded-full text-xs font-medium",
@@ -651,6 +673,22 @@ export default function Home() {
                       </table>
                     </div>
                   </Card>
+              </div>
+            )}
+
+             {activeTab === 'rekap' && (
+              <div className="space-y-6">
+                 <div className="flex items-center mb-6">
+                  <button 
+                    onClick={() => setActiveTab('dashboard')}
+                    className="mr-4 p-2 hover:bg-gray-100 rounded-full md:hidden"
+                  >
+                    ←
+                  </button>
+                  <h1 className="text-2xl font-bold text-gray-900">Rekap Pembayaran Anggota</h1>
+                </div>
+                
+                <RekapView members={data.members} transactions={data.transactions} />
               </div>
             )}
 
@@ -750,12 +788,13 @@ export default function Home() {
   );
 }
 
-function DepositForm({ onDeposit }: { onDeposit: (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string) => void }) {
+function DepositForm({ onDeposit, members }: { onDeposit: (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string, memberId: string, memberName: string) => void, members: Member[] }) {
   const [type, setType] = useState<TransactionType>('SUKARELA');
   const [amount, setAmount] = useState<string>('');
   const [note, setNote] = useState('');
   const [periodMonth, setPeriodMonth] = useState(new Date().getMonth() + 1);
   const [periodYear, setPeriodYear] = useState(new Date().getFullYear());
+  const [selectedMemberId, setSelectedMemberId] = useState('');
 
   // Set default amounts
   useEffect(() => {
@@ -768,10 +807,20 @@ function DepositForm({ onDeposit }: { onDeposit: (type: TransactionType, amount:
     e.preventDefault();
     if (!amount) return;
     
-    onDeposit(type, parseInt(amount), periodMonth, periodYear, note);
-    // Reset handled by parent changing view usually, but if not:
+    // Validate member
+    if (!selectedMemberId) {
+      alert("Silakan pilih anggota terlebih dahulu.");
+      return;
+    }
+
+    const member = members.find(m => m.id === selectedMemberId);
+    if (!member) return;
+
+    onDeposit(type, parseInt(amount), periodMonth, periodYear, note, member.id, member.fullName);
+    
     setNote('');
     if (type === 'SUKARELA') setAmount('');
+    // Keep member selected for convenience
   };
 
   const isFixed = type === 'POKOK' || type === 'WAJIB';
@@ -784,6 +833,21 @@ function DepositForm({ onDeposit }: { onDeposit: (type: TransactionType, amount:
   return (
     <Card>
       <form onSubmit={handleSubmit} className="space-y-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Pilih Anggota</label>
+          <select
+            value={selectedMemberId}
+            onChange={(e) => setSelectedMemberId(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+            required
+          >
+            <option value="">-- Pilih Anggota --</option>
+            {members.map(m => (
+              <option key={m.id} value={m.id}>{m.memberNo} - {m.fullName}</option>
+            ))}
+          </select>
+        </div>
+
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Jenis Simpanan</label>
           <div className="grid grid-cols-3 gap-3">
@@ -873,6 +937,115 @@ function DepositForm({ onDeposit }: { onDeposit: (type: TransactionType, amount:
           Konfirmasi Setoran
         </button>
       </form>
+    </Card>
+  );
+}
+
+function RekapView({ members, transactions }: { members: Member[], transactions: Transaction[] }) {
+  const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
+  const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+
+  const months = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
+  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+
+  return (
+    <Card>
+      <div className="mb-6 flex gap-4 items-end">
+        <div>
+           <label className="block text-sm font-medium text-gray-700 mb-1">Bulan</label>
+           <select
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(parseInt(e.target.value))}
+              className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              {months.map((m, i) => (
+                <option key={i} value={i + 1}>{m}</option>
+              ))}
+            </select>
+        </div>
+        <div>
+           <label className="block text-sm font-medium text-gray-700 mb-1">Tahun</label>
+           <select
+              value={filterYear}
+              onChange={(e) => setFilterYear(parseInt(e.target.value))}
+              className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
+            >
+              {years.map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full text-left text-sm text-gray-600">
+          <thead className="bg-gray-50 text-gray-900 font-medium border-b border-gray-100">
+            <tr>
+              <th className="px-6 py-4">No. Anggota</th>
+              <th className="px-6 py-4">Nama Lengkap</th>
+              <th className="px-6 py-4 text-center">Status Simpanan Wajib</th>
+              <th className="px-6 py-4 text-center">Status Simpanan Pokok</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {members.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                  Belum ada data anggota.
+                </td>
+              </tr>
+            ) : (
+              members.map((m) => {
+                // Check if paid Wajib for this period
+                const hasPaidWajib = transactions.some(t => 
+                  t.memberId === m.id && 
+                  t.type === 'WAJIB' && 
+                  t.periodMonth === filterMonth && 
+                  t.periodYear === filterYear
+                );
+                
+                // Check if ever paid Pokok
+                const hasPaidPokok = transactions.some(t => 
+                  t.memberId === m.id && 
+                  t.type === 'POKOK'
+                );
+
+                return (
+                  <tr key={m.id} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4 font-medium text-gray-900">{m.memberNo}</td>
+                    <td className="px-6 py-4">{m.fullName}</td>
+                    <td className="px-6 py-4 text-center">
+                      {hasPaidWajib ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Lunas
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                          Belum Bayar
+                        </span>
+                      )}
+                    </td>
+                     <td className="px-6 py-4 text-center">
+                      {hasPaidPokok ? (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          Lunas
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                          Belum Lunas
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
     </Card>
   );
 }
