@@ -21,6 +21,8 @@ import {
 import { collection, addDoc, onSnapshot, query, orderBy, writeBatch, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
+export const dynamic = 'force-dynamic';
+
 // --- Types ---
 
 type TransactionType = 'POKOK' | 'WAJIB' | 'SUKARELA';
