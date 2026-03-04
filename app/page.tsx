@@ -18,6 +18,8 @@ import {
   FileSpreadsheet,
   Printer
 } from 'lucide-react';
+import { collection, addDoc, onSnapshot, query, orderBy, writeBatch, doc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 // --- Types ---
 
@@ -108,47 +110,67 @@ export default function Home() {
   const [isLoaded, setIsLoaded] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load data from localStorage
+  // Subscribe to Firebase Data
   useEffect(() => {
-    const saved = localStorage.getItem('koperasi-data');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        // Migration/Safety check for new fields
-        if (!parsed.members) parsed.members = [];
-        setData(parsed);
-      } catch (e) {
-        console.error("Failed to parse data", e);
-      }
-    }
-    setIsLoaded(true);
+    // Subscribe to Members
+    const membersQuery = query(collection(db, 'members'), orderBy('memberNo', 'asc'));
+    const unsubscribeMembers = onSnapshot(membersQuery, (snapshot) => {
+      const members = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Member[];
+      
+      setData(prev => ({ ...prev, members }));
+    });
+
+    // Subscribe to Transactions
+    const transactionsQuery = query(collection(db, 'transactions'), orderBy('date', 'desc'));
+    const unsubscribeTransactions = onSnapshot(transactionsQuery, (snapshot) => {
+      const transactions = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      })) as Transaction[];
+
+      // Calculate totals
+      const totals = transactions.reduce((acc, curr) => {
+        const type = curr.type.toLowerCase() as keyof Pick<SavingsData, 'pokok' | 'wajib' | 'sukarela'>;
+        acc[type] = (acc[type] || 0) + curr.amount;
+        return acc;
+      }, { pokok: 0, wajib: 0, sukarela: 0 });
+
+      setData(prev => ({
+        ...prev,
+        transactions,
+        pokok: totals.pokok,
+        wajib: totals.wajib,
+        sukarela: totals.sukarela
+      }));
+      
+      setIsLoaded(true);
+    });
+
+    return () => {
+      unsubscribeMembers();
+      unsubscribeTransactions();
+    };
   }, []);
 
-  // Save data to localStorage
-  useEffect(() => {
-    if (isLoaded) {
-      localStorage.setItem('koperasi-data', JSON.stringify(data));
+  const handleDeposit = async (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string) => {
+    try {
+      await addDoc(collection(db, 'transactions'), {
+        date: new Date().toISOString(),
+        type,
+        amount,
+        periodMonth,
+        periodYear,
+        note,
+      });
+      setActiveTab('dashboard');
+      alert('Simpanan berhasil disimpan!');
+    } catch (error) {
+      console.error("Error adding document: ", error);
+      alert('Gagal menyimpan transaksi.');
     }
-  }, [data, isLoaded]);
-
-  const handleDeposit = (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string) => {
-    const newTransaction: Transaction = {
-      id: crypto.randomUUID(),
-      date: new Date().toISOString(),
-      type,
-      amount,
-      periodMonth,
-      periodYear,
-      note,
-    };
-
-    setData(prev => ({
-      ...prev,
-      [type.toLowerCase()]: prev[type.toLowerCase() as keyof Omit<SavingsData, 'transactions' | 'members'>] + amount,
-      transactions: [newTransaction, ...prev.transactions],
-    }));
-
-    setActiveTab('dashboard');
   };
 
   const handleExportMembers = () => {
@@ -167,28 +189,38 @@ export default function Home() {
     if (!file) return;
 
     const reader = new FileReader();
-    reader.onload = (evt) => {
-      const bstr = evt.target?.result;
-      const wb = XLSX.read(bstr, { type: 'binary' });
-      const wsname = wb.SheetNames[0];
-      const ws = wb.Sheets[wsname];
-      const jsonData = XLSX.utils.sheet_to_json(ws) as any[];
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const jsonData = XLSX.utils.sheet_to_json(ws) as any[];
 
-      const newMembers: Member[] = jsonData.map((row: any) => ({
-        id: crypto.randomUUID(),
-        memberNo: row['No. Anggota'] || row['No'] || `M-${Math.floor(Math.random() * 1000)}`,
-        fullName: row['Nama Lengkap'] || row['Nama'],
-        joinDate: new Date().toISOString() // Default to now if not present
-      })).filter(m => m.fullName); // Simple validation
+        const batch = writeBatch(db);
+        let count = 0;
 
-      setData(prev => ({
-        ...prev,
-        members: [...prev.members, ...newMembers]
-      }));
-      
-      // Reset input
-      if (fileInputRef.current) fileInputRef.current.value = '';
-      alert(`Berhasil mengimpor ${newMembers.length} anggota.`);
+        jsonData.forEach((row: any) => {
+          if (row['Nama Lengkap'] || row['Nama']) {
+            const docRef = doc(collection(db, 'members')); // Generate new ID
+            batch.set(docRef, {
+              memberNo: row['No. Anggota'] || row['No'] || `M-${Math.floor(Math.random() * 10000)}`,
+              fullName: row['Nama Lengkap'] || row['Nama'],
+              joinDate: new Date().toISOString()
+            });
+            count++;
+          }
+        });
+
+        await batch.commit();
+        
+        // Reset input
+        if (fileInputRef.current) fileInputRef.current.value = '';
+        alert(`Berhasil mengimpor ${count} anggota.`);
+      } catch (error) {
+        console.error("Error importing members: ", error);
+        alert('Gagal mengimpor anggota.');
+      }
     };
     reader.readAsBinaryString(file);
   };
@@ -268,7 +300,7 @@ export default function Home() {
     }
   };
 
-  if (!isLoaded) return null; // or a loading spinner
+  if (!isLoaded) return <div className="flex h-screen items-center justify-center">Loading...</div>;
 
   const totalBalance = data.pokok + data.wajib + data.sukarela;
 
