@@ -249,7 +249,7 @@ export default function Home() {
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Template");
-    XLSX.writeFile(wb, "template-anggota-v2.xlsx");
+    XLSX.writeFile(wb, "template-anggota-v3.xlsx");
   };
 
   const handlePrintReceipt = (transaction: Transaction) => {
