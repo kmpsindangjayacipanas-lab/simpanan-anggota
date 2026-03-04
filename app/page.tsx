@@ -22,6 +22,8 @@ interface Transaction {
   date: string; // ISO string
   type: TransactionType;
   amount: number;
+  periodMonth: number;
+  periodYear: number;
   note?: string;
 }
 
@@ -110,12 +112,14 @@ export default function Home() {
     }
   }, [data, isLoaded]);
 
-  const handleDeposit = (type: TransactionType, amount: number, note: string) => {
+  const handleDeposit = (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string) => {
     const newTransaction: Transaction = {
       id: crypto.randomUUID(),
       date: new Date().toISOString(),
       type,
       amount,
+      periodMonth,
+      periodYear,
       note,
     };
 
@@ -269,6 +273,7 @@ export default function Home() {
                           <tr>
                             <th className="px-6 py-4">Tanggal</th>
                             <th className="px-6 py-4">Jenis</th>
+                            <th className="px-6 py-4">Periode</th>
                             <th className="px-6 py-4">Keterangan</th>
                             <th className="px-6 py-4 text-right">Jumlah</th>
                           </tr>
@@ -276,7 +281,7 @@ export default function Home() {
                         <tbody className="divide-y divide-gray-100">
                           {data.transactions.length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                              <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                                 Belum ada transaksi
                               </td>
                             </tr>
@@ -297,6 +302,11 @@ export default function Home() {
                                   )}>
                                     {t.type}
                                   </span>
+                                </td>
+                                <td className="px-6 py-4 text-gray-600">
+                                  {t.periodMonth && t.periodYear 
+                                    ? new Date(t.periodYear, t.periodMonth - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+                                    : '-'}
                                 </td>
                                 <td className="px-6 py-4">{t.note || '-'}</td>
                                 <td className="px-6 py-4 text-right font-medium text-gray-900">
@@ -348,6 +358,7 @@ export default function Home() {
                           <tr>
                             <th className="px-6 py-4">Tanggal</th>
                             <th className="px-6 py-4">Jenis</th>
+                            <th className="px-6 py-4">Periode</th>
                             <th className="px-6 py-4">Keterangan</th>
                             <th className="px-6 py-4 text-right">Jumlah</th>
                           </tr>
@@ -355,7 +366,7 @@ export default function Home() {
                         <tbody className="divide-y divide-gray-100">
                           {data.transactions.length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                              <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
                                 Belum ada transaksi
                               </td>
                             </tr>
@@ -377,6 +388,11 @@ export default function Home() {
                                     {t.type}
                                   </span>
                                 </td>
+                                <td className="px-6 py-4 text-gray-600">
+                                  {t.periodMonth && t.periodYear 
+                                    ? new Date(t.periodYear, t.periodMonth - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })
+                                    : '-'}
+                                </td>
                                 <td className="px-6 py-4">{t.note || '-'}</td>
                                 <td className="px-6 py-4 text-right font-medium text-gray-900">
                                   + {formatRupiah(t.amount)}
@@ -397,10 +413,12 @@ export default function Home() {
   );
 }
 
-function DepositForm({ onDeposit }: { onDeposit: (type: TransactionType, amount: number, note: string) => void }) {
+function DepositForm({ onDeposit }: { onDeposit: (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string) => void }) {
   const [type, setType] = useState<TransactionType>('SUKARELA');
   const [amount, setAmount] = useState<string>('');
   const [note, setNote] = useState('');
+  const [periodMonth, setPeriodMonth] = useState(new Date().getMonth() + 1);
+  const [periodYear, setPeriodYear] = useState(new Date().getFullYear());
 
   // Set default amounts
   useEffect(() => {
@@ -413,13 +431,18 @@ function DepositForm({ onDeposit }: { onDeposit: (type: TransactionType, amount:
     e.preventDefault();
     if (!amount) return;
     
-    onDeposit(type, parseInt(amount), note);
+    onDeposit(type, parseInt(amount), periodMonth, periodYear, note);
     // Reset handled by parent changing view usually, but if not:
     setNote('');
     if (type === 'SUKARELA') setAmount('');
   };
 
   const isFixed = type === 'POKOK' || type === 'WAJIB';
+  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+  const months = [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+  ];
 
   return (
     <Card>
@@ -442,6 +465,34 @@ function DepositForm({ onDeposit }: { onDeposit: (type: TransactionType, amount:
                 Simpanan {t.charAt(0) + t.slice(1).toLowerCase()}
               </button>
             ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Periode Pembayaran</label>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <select
+                value={periodMonth}
+                onChange={(e) => setPeriodMonth(parseInt(e.target.value))}
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+              >
+                {months.map((m, i) => (
+                  <option key={i} value={i + 1}>{m}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <select
+                value={periodYear}
+                onChange={(e) => setPeriodYear(parseInt(e.target.value))}
+                className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white"
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
