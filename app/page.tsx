@@ -15,7 +15,8 @@ import {
   Users,
   Download,
   Upload,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Printer
 } from 'lucide-react';
 
 // --- Types ---
@@ -192,6 +193,81 @@ export default function Home() {
     reader.readAsBinaryString(file);
   };
 
+  const handleDownloadTemplate = () => {
+    const ws = XLSX.utils.json_to_sheet([
+      { 'No. Anggota': 'KOP-001', 'Nama Lengkap': 'John Doe' },
+      { 'No. Anggota': 'KOP-002', 'Nama Lengkap': 'Jane Smith' }
+    ]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template");
+    XLSX.writeFile(wb, "template-anggota.xlsx");
+  };
+
+  const handlePrintReceipt = (transaction: Transaction) => {
+    const printWindow = window.open('', '', 'width=600,height=600');
+    if (printWindow) {
+      printWindow.document.write(`
+        <html>
+          <head>
+            <title>Kuitansi Pembayaran</title>
+            <style>
+              body { font-family: Arial, sans-serif; padding: 20px; }
+              .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+              .title { font-size: 24px; font-weight: bold; }
+              .subtitle { font-size: 14px; color: #555; }
+              .content { margin-bottom: 30px; }
+              .row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+              .label { font-weight: bold; }
+              .footer { text-align: right; margin-top: 50px; }
+              .amount { font-size: 18px; font-weight: bold; border-top: 1px solid #ccc; padding-top: 10px; }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div class="title">KOPERASI SIMPAN PINJAM</div>
+              <div class="subtitle">Bukti Pembayaran Simpanan</div>
+            </div>
+            <div class="content">
+              <div class="row">
+                <span class="label">No. Transaksi:</span>
+                <span>${transaction.id.slice(0, 8).toUpperCase()}</span>
+              </div>
+              <div class="row">
+                <span class="label">Tanggal:</span>
+                <span>${new Date(transaction.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              </div>
+              <div class="row">
+                <span class="label">Jenis Simpanan:</span>
+                <span>${transaction.type}</span>
+              </div>
+              <div class="row">
+                <span class="label">Periode:</span>
+                <span>${transaction.periodMonth && transaction.periodYear ? new Date(transaction.periodYear, transaction.periodMonth - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' }) : '-'}</span>
+              </div>
+              <div class="row">
+                <span class="label">Keterangan:</span>
+                <span>${transaction.note || '-'}</span>
+              </div>
+              <div class="row amount">
+                <span class="label">Jumlah:</span>
+                <span>${formatRupiah(transaction.amount)}</span>
+              </div>
+            </div>
+            <div class="footer">
+              <p>Petugas,</p>
+              <br><br>
+              <p>(_________________)</p>
+            </div>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    }
+  };
+
   if (!isLoaded) return null; // or a loading spinner
 
   const totalBalance = data.pokok + data.wajib + data.sukarela;
@@ -348,12 +424,13 @@ export default function Home() {
                             <th className="px-6 py-4">Periode</th>
                             <th className="px-6 py-4">Keterangan</th>
                             <th className="px-6 py-4 text-right">Jumlah</th>
+                            <th className="px-6 py-4 text-center">Aksi</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {data.transactions.length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                              <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                                 Belum ada transaksi
                               </td>
                             </tr>
@@ -383,6 +460,15 @@ export default function Home() {
                                 <td className="px-6 py-4">{t.note || '-'}</td>
                                 <td className="px-6 py-4 text-right font-medium text-gray-900">
                                   + {formatRupiah(t.amount)}
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <button
+                                    onClick={() => handlePrintReceipt(t)}
+                                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                                    title="Cetak Kuitansi"
+                                  >
+                                    <Printer className="w-4 h-4" />
+                                  </button>
                                 </td>
                               </tr>
                             ))
@@ -433,12 +519,13 @@ export default function Home() {
                             <th className="px-6 py-4">Periode</th>
                             <th className="px-6 py-4">Keterangan</th>
                             <th className="px-6 py-4 text-right">Jumlah</th>
+                            <th className="px-6 py-4 text-center">Aksi</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                           {data.transactions.length === 0 ? (
                             <tr>
-                              <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
+                              <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                                 Belum ada transaksi
                               </td>
                             </tr>
@@ -468,6 +555,15 @@ export default function Home() {
                                 <td className="px-6 py-4">{t.note || '-'}</td>
                                 <td className="px-6 py-4 text-right font-medium text-gray-900">
                                   + {formatRupiah(t.amount)}
+                                </td>
+                                <td className="px-6 py-4 text-center">
+                                  <button
+                                    onClick={() => handlePrintReceipt(t)}
+                                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                                    title="Cetak Kuitansi"
+                                  >
+                                    <Printer className="w-4 h-4" />
+                                  </button>
                                 </td>
                               </tr>
                             ))
@@ -506,6 +602,13 @@ export default function Home() {
                       accept=".xlsx, .xls" 
                       className="hidden" 
                     />
+                    <button 
+                      onClick={handleDownloadTemplate}
+                      className="flex-1 md:flex-none flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+                    >
+                      <FileSpreadsheet className="w-4 h-4 mr-2" />
+                      Template
+                    </button>
                     <button 
                       onClick={handleExportMembers}
                       className="flex-1 md:flex-none flex items-center justify-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
