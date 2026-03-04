@@ -112,6 +112,9 @@ export default function Home() {
 
   // Subscribe to Firebase Data
   useEffect(() => {
+    console.log("Initializing Firebase Subscription...");
+    console.log("API Key present:", !!process.env.NEXT_PUBLIC_FIREBASE_API_KEY);
+    
     // Subscribe to Members
     const membersQuery = query(collection(db, 'members'), orderBy('memberNo', 'asc'));
     const unsubscribeMembers = onSnapshot(membersQuery, (snapshot) => {
@@ -394,6 +397,7 @@ export default function Home() {
               <div>
                 <p className="text-sm font-medium text-gray-900">Anggota Koperasi</p>
                 <p className="text-xs text-gray-500">ID: KOP-2024-001</p>
+                <p className="text-[10px] text-gray-400 mt-1">v1.0.5 (Firebase)</p>
               </div>
             </div>
           </div>
