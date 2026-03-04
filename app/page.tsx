@@ -200,6 +200,8 @@ export default function Home() {
         const ws = wb.Sheets[wsname];
         const jsonData = XLSX.utils.sheet_to_json(ws) as any[];
 
+        console.log("Importing data:", jsonData); // Debug log
+
         const batch = writeBatch(db);
         let count = 0;
 
@@ -223,23 +225,27 @@ export default function Home() {
                }
             }
 
-            batch.set(docRef, {
+            const memberData = {
               memberNo: row['No. Anggota'] || row['No'] || `M-${Math.floor(Math.random() * 10000)}`,
               fullName: row['Nama Lengkap'] || row['Nama'],
               joinDate: joinDate
-            });
+            };
+            
+            console.log("Adding member:", memberData); // Debug log
+            batch.set(docRef, memberData);
             count++;
           }
         });
 
         await batch.commit();
+        console.log("Batch commit successful");
         
         // Reset input
         if (fileInputRef.current) fileInputRef.current.value = '';
         alert(`Berhasil mengimpor ${count} anggota.`);
       } catch (error) {
         console.error("Error importing members: ", error);
-        alert('Gagal mengimpor anggota.');
+        alert('Gagal mengimpor anggota. Cek Console untuk detail error.');
       }
     };
     reader.readAsBinaryString(file);
