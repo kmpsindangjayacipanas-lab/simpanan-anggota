@@ -592,7 +592,7 @@ export default function Home() {
                   <h1 className="text-2xl font-bold text-gray-900">Setor Simpanan Baru</h1>
                 </div>
                 
-                <DepositForm onDeposit={handleDeposit} members={data.members} />
+                <DepositForm onDeposit={handleDeposit} members={data.members} transactions={data.transactions} />
               </div>
             )}
 
@@ -788,7 +788,7 @@ export default function Home() {
   );
 }
 
-function DepositForm({ onDeposit, members }: { onDeposit: (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string, memberId: string, memberName: string) => void, members: Member[] }) {
+function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string, memberId: string, memberName: string) => void, members: Member[], transactions: Transaction[] }) {
   const [type, setType] = useState<TransactionType>('SUKARELA');
   const [amount, setAmount] = useState<string>('');
   const [note, setNote] = useState('');
@@ -815,6 +815,44 @@ function DepositForm({ onDeposit, members }: { onDeposit: (type: TransactionType
 
     const member = members.find(m => m.id === selectedMemberId);
     if (!member) return;
+
+    // --- Check Join Date (Tidak boleh bayar sebelum bergabung) ---
+    const joinDate = new Date(member.joinDate);
+    // Use year and month for comparison (set date to 1 to avoid day mismatch)
+    const memberJoinDate = new Date(joinDate.getFullYear(), joinDate.getMonth(), 1);
+    const selectedPeriodDate = new Date(periodYear, periodMonth - 1, 1);
+
+    if (selectedPeriodDate < memberJoinDate) {
+      alert(`Gagal: Periode pembayaran (${new Date(periodYear, periodMonth - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}) lebih awal dari tanggal bergabung anggota (${joinDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}).`);
+      return;
+    }
+
+    // Check for existing payments
+    if (type === 'POKOK') {
+      const hasPaidPokok = transactions.some(t => 
+        t.memberId === member.id && 
+        t.type === 'POKOK'
+      );
+      if (hasPaidPokok) {
+        alert(`Anggota ${member.fullName} SUDAH LUNAS Simpanan Pokok. Tidak bisa membayar lagi.`);
+        return;
+      }
+    }
+
+    if (type === 'WAJIB') {
+      const hasPaidWajib = transactions.some(t => 
+        t.memberId === member.id && 
+        t.type === 'WAJIB' && 
+        t.periodMonth === periodMonth && 
+        t.periodYear === periodYear
+      );
+      
+      const monthName = new Date(periodYear, periodMonth - 1).toLocaleDateString('id-ID', { month: 'long' });
+      if (hasPaidWajib) {
+        alert(`Anggota ${member.fullName} SUDAH LUNAS Simpanan Wajib untuk periode ${monthName} ${periodYear}.`);
+        return;
+      }
+    }
 
     onDeposit(type, parseInt(amount), periodMonth, periodYear, note, member.id, member.fullName);
     
