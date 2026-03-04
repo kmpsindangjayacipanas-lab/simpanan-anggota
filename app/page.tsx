@@ -203,10 +203,27 @@ export default function Home() {
         jsonData.forEach((row: any) => {
           if (row['Nama Lengkap'] || row['Nama']) {
             const docRef = doc(collection(db, 'members')); // Generate new ID
+            
+            // Handle join date parsing
+            let joinDate = new Date().toISOString();
+            if (row['Tanggal Bergabung']) {
+               // Try to parse Excel date (if it's a number)
+               if (typeof row['Tanggal Bergabung'] === 'number') {
+                 const date = new Date((row['Tanggal Bergabung'] - (25567 + 2)) * 86400 * 1000);
+                 joinDate = date.toISOString();
+               } else {
+                 // Try to parse string date
+                 const parsedDate = new Date(row['Tanggal Bergabung']);
+                 if (!isNaN(parsedDate.getTime())) {
+                   joinDate = parsedDate.toISOString();
+                 }
+               }
+            }
+
             batch.set(docRef, {
               memberNo: row['No. Anggota'] || row['No'] || `M-${Math.floor(Math.random() * 10000)}`,
               fullName: row['Nama Lengkap'] || row['Nama'],
-              joinDate: new Date().toISOString()
+              joinDate: joinDate
             });
             count++;
           }
@@ -227,8 +244,8 @@ export default function Home() {
 
   const handleDownloadTemplate = () => {
     const ws = XLSX.utils.json_to_sheet([
-      { 'No. Anggota': 'KOP-001', 'Nama Lengkap': 'John Doe' },
-      { 'No. Anggota': 'KOP-002', 'Nama Lengkap': 'Jane Smith' }
+      { 'No. Anggota': 'KOP-001', 'Nama Lengkap': 'John Doe', 'Tanggal Bergabung': '2024-01-01' },
+      { 'No. Anggota': 'KOP-002', 'Nama Lengkap': 'Jane Smith', 'Tanggal Bergabung': '2024-02-15' }
     ]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Template");
@@ -690,8 +707,8 @@ export default function Home() {
                     <FileSpreadsheet className="w-5 h-5 mr-3 flex-shrink-0 mt-0.5" />
                     <div>
                       <p className="font-semibold mb-1">Format Import Excel:</p>
-                      <p>Pastikan file Excel memiliki header kolom: <strong>No. Anggota</strong>, <strong>Nama Lengkap</strong>.</p>
-                      <p className="mt-1 text-blue-600 text-xs">Kolom opsional: Tanggal Bergabung (jika kosong akan menggunakan tanggal hari ini).</p>
+                      <p>Pastikan file Excel memiliki header kolom: <strong>No. Anggota</strong>, <strong>Nama Lengkap</strong>, dan <strong>Tanggal Bergabung</strong> (Opsional).</p>
+                      <p className="mt-1 text-blue-600 text-xs">Format Tanggal: YYYY-MM-DD (Contoh: 2024-01-31).</p>
                     </div>
                   </div>
               </div>
