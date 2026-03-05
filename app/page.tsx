@@ -1311,54 +1311,44 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm text-gray-600">
-          <thead className="bg-gray-50 text-gray-900 font-medium border-b border-gray-100">
+        <h2 className="text-center font-bold text-lg mb-4">SIMPANAN ANGGOTA PER 31 DESEMBER {filterYear}</h2>
+        <table className="w-full text-left text-sm text-gray-600 border border-gray-300">
+          <thead className="bg-gray-100 text-gray-900 font-bold text-center">
             <tr>
-              <th className="w-10 px-6 py-4"></th>
-              <th className="px-6 py-4">No. Anggota</th>
-              <th className="px-6 py-4">Nama Lengkap</th>
-              <th className="px-6 py-4 text-center">Status Wajib ({months[filterMonth - 1]})</th>
-              <th className="px-6 py-4 text-center">Status Pokok</th>
-              <th className="px-6 py-4 text-right">Total Saldo</th>
-              <th className="px-6 py-4">Bulan Terbayar ({filterYear})</th>
+              <th className="border border-gray-300 px-2 py-2 w-10" rowSpan={2}></th>
+              <th className="border border-gray-300 px-4 py-2" colSpan={2}>NOMOR</th>
+              <th className="border border-gray-300 px-4 py-2" rowSpan={2}>NAMA</th>
+              <th className="border border-gray-300 px-4 py-2" rowSpan={2}>MASUK JADI<br/>ANGGOTA</th>
+              <th className="border border-gray-300 px-4 py-2" colSpan={3}>SIMPANAN</th>
+            </tr>
+            <tr>
+               <th className="border border-gray-300 px-4 py-2">URUT</th>
+               <th className="border border-gray-300 px-4 py-2">ANGGOTA</th>
+               <th className="border border-gray-300 px-4 py-2">POKOK</th>
+               <th className="border border-gray-300 px-4 py-2">WAJIB</th>
+               <th className="border border-gray-300 px-4 py-2">JUMLAH</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {members.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={8} className="px-6 py-8 text-center text-gray-500 border border-gray-300">
                   Belum ada data anggota.
                 </td>
               </tr>
             ) : (
-              members.map((m) => {
+              members.map((m, index) => {
                 const isExpanded = expandedMembers[m.id];
                 
-                // Check if paid Wajib for this period
-                const hasPaidWajib = transactions.some(t => 
-                  t.memberId === m.id && 
-                  t.type === 'WAJIB' && 
-                  t.periodMonth === filterMonth && 
-                  t.periodYear === filterYear
-                );
-                
-                // Check if ever paid Pokok
-                const hasPaidPokok = transactions.some(t => 
-                  t.memberId === m.id && 
-                  t.type === 'POKOK'
-                );
-
-                // Calculate Total Saldo
+                // Calculate Totals per Member
                 const memberTransactions = transactions.filter(t => t.memberId === m.id);
-                const totalSaldo = memberTransactions.reduce((sum, t) => sum + t.amount, 0);
-
-                // Get Paid Months for selected year (Wajib Only) for summary column
-                const paidMonthsIndices = transactions
-                  .filter(t => t.memberId === m.id && t.type === 'WAJIB' && t.periodYear === filterYear)
-                  .map(t => t.periodMonth)
-                  .sort((a, b) => a - b);
-                
-                const paidMonthsList = paidMonthsIndices.map(idx => months[idx - 1]).join(', ');
+                const totalPokok = memberTransactions
+                    .filter(t => t.type === 'POKOK')
+                    .reduce((sum, t) => sum + t.amount, 0);
+                const totalWajib = memberTransactions
+                    .filter(t => t.type === 'WAJIB')
+                    .reduce((sum, t) => sum + t.amount, 0);
+                const totalJumlah = totalPokok + totalWajib;
 
                 // Calculate Full Payment History for Expanded View
                 const historyByYear: Record<number, { month: number, date: string }[]> = {};
@@ -1380,40 +1370,33 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
                 return (
                   <Fragment key={m.id}>
                     <tr 
-                      className={cn("hover:bg-gray-50 transition-colors cursor-pointer", isExpanded && "bg-blue-50/50")}
+                      className={cn("hover:bg-gray-50 transition-colors cursor-pointer border-b border-gray-200", isExpanded && "bg-blue-50/50")}
                       onClick={() => toggleExpand(m.id)}
                     >
-                      <td className="px-6 py-4 text-center">
-                        {isExpanded ? <ChevronDown className="w-4 h-4 text-blue-600" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                      <td className="px-2 py-2 text-center border-r border-gray-200">
+                        {isExpanded ? <ChevronDown className="w-4 h-4 text-blue-600 mx-auto" /> : <ChevronRight className="w-4 h-4 text-gray-400 mx-auto" />}
                       </td>
-                      <td className="px-6 py-4 font-medium text-gray-900">{m.memberNo}</td>
-                      <td className="px-6 py-4">{m.fullName}</td>
-                      <td className="px-6 py-4 text-center">
-                        {hasPaidWajib ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Lunas
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                            Belum Bayar
-                          </span>
-                        )}
+                      <td className="px-4 py-2 text-center border-r border-gray-200">{index + 1}</td>
+                      <td className="px-4 py-2 font-medium text-gray-900 border-r border-gray-200">{m.memberNo}</td>
+                      <td className="px-4 py-2 border-r border-gray-200">{m.fullName}</td>
+                      <td className="px-4 py-2 text-center border-r border-gray-200">
+                         {new Date(m.joinDate).toLocaleDateString('id-ID', {
+                             day: 'numeric', month: 'long', year: 'numeric'
+                         })}
                       </td>
-                       <td className="px-6 py-4 text-center">
-                        {hasPaidPokok ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                            Lunas
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                            Belum Lunas
-                          </span>
-                        )}
+                       <td className="px-4 py-2 text-right border-r border-gray-200">
+                        {formatRupiah(totalPokok)}
                       </td>
-                      <td className="px-6 py-4 text-right font-bold text-gray-900">
-                        {formatRupiah(totalSaldo)}
+                      <td className="px-4 py-2 text-right border-r border-gray-200">
+                        {formatRupiah(totalWajib)}
                       </td>
-                      <td className="px-6 py-4 text-xs text-gray-500 max-w-[200px] truncate" title={paidMonthsList}>
+                      <td className="px-4 py-2 text-right font-bold text-gray-900">
+                        {formatRupiah(totalJumlah)}
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="bg-gray-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <td colSpan={8} className="px-6 py-4 border-b border-gray-100"> py-4 text-xs text-gray-500 max-w-[200px] truncate" title={paidMonthsList}>
                         {paidMonthsList || '-'}
                       </td>
                     </tr>
