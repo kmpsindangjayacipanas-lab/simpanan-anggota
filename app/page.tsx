@@ -817,6 +817,7 @@ function DepositForm({ onDeposit, onMultiDeposit, members, transactions }: { onD
   const [hasPaidPokok, setHasPaidPokok] = useState(false);
   const [paidMonths, setPaidMonths] = useState<number[]>([]);
   const [isMultiMonth, setIsMultiMonth] = useState(false);
+  const [duration, setDuration] = useState(1);
 
   // Check payment status when member or year changes
   useEffect(() => {
