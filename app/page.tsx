@@ -182,6 +182,25 @@ export default function Home() {
     }
   };
 
+  const handleMultiDeposit = async (transactionsData: any[]) => {
+    try {
+      const batch = writeBatch(db);
+      transactionsData.forEach(data => {
+         const docRef = doc(collection(db, 'transactions'));
+         batch.set(docRef, {
+            ...data,
+            date: new Date().toISOString()
+         });
+      });
+      await batch.commit();
+      setActiveTab('dashboard');
+      alert(`Berhasil menyimpan ${transactionsData.length} transaksi!`);
+    } catch (error) {
+      console.error("Error batch writing documents: ", error);
+      alert('Gagal menyimpan transaksi massal.');
+    }
+  };
+
   const handleExportMembers = () => {
     const ws = XLSX.utils.json_to_sheet(data.members.map(m => ({
       'No. Anggota': m.memberNo,
@@ -443,7 +462,7 @@ export default function Home() {
               <div>
                 <p className="text-sm font-medium text-gray-900">Anggota Koperasi</p>
                 <p className="text-xs text-gray-500">ID: KOP-2024-001</p>
-                <p className="text-[10px] text-gray-400 mt-1">v1.1.0 (Firebase)</p>
+                <p className="text-[10px] text-gray-400 mt-1">v1.2.0 (Multi-Payment)</p>
               </div>
             </div>
           </div>
@@ -592,7 +611,7 @@ export default function Home() {
                   <h1 className="text-2xl font-bold text-gray-900">Setor Simpanan Baru</h1>
                 </div>
                 
-                <DepositForm onDeposit={handleDeposit} members={data.members} transactions={data.transactions} />
+                <DepositForm onDeposit={handleDeposit} onMultiDeposit={handleMultiDeposit} members={data.members} transactions={data.transactions} />
               </div>
             )}
 
@@ -788,7 +807,7 @@ export default function Home() {
   );
 }
 
-function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string, memberId: string, memberName: string) => void, members: Member[], transactions: Transaction[] }) {
+function DepositForm({ onDeposit, onMultiDeposit, members, transactions }: { onDeposit: (type: TransactionType, amount: number, periodMonth: number, periodYear: number, note: string, memberId: string, memberName: string) => void, onMultiDeposit: (transactions: any[]) => void, members: Member[], transactions: Transaction[] }) {
   const [type, setType] = useState<TransactionType>('SUKARELA');
   const [amount, setAmount] = useState<string>('');
   const [note, setNote] = useState('');
@@ -797,6 +816,7 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
   const [selectedMemberId, setSelectedMemberId] = useState('');
   const [hasPaidPokok, setHasPaidPokok] = useState(false);
   const [paidMonths, setPaidMonths] = useState<number[]>([]);
+  const [isMultiMonth, setIsMultiMonth] = useState(false);
 
   // Check payment status when member or year changes
   useEffect(() => {
@@ -805,6 +825,9 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
       setPaidMonths([]);
       return;
     }
+
+    const member = members.find(m => m.id === selectedMemberId);
+    if (!member) return;
 
     // Check Pokok
     const isPokokPaid = transactions.some(t => t.memberId === selectedMemberId && t.type === 'POKOK');
@@ -823,12 +846,84 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
 
   }, [selectedMemberId, transactions, periodYear, type]);
 
+  // Auto-select next unpaid month for WAJIB (Run only when member changes or type changes to WAJIB)
+  useEffect(() => {
+    if (type !== 'WAJIB' || !selectedMemberId) return;
+    
+    const member = members.find(m => m.id === selectedMemberId);
+    if (!member) return;
+
+    const joinDate = new Date(member.joinDate);
+    
+    let checkMonth = joinDate.getMonth() + 1;
+    let checkYear = joinDate.getFullYear();
+    
+    // Safety loop limit (e.g. 10 years ahead)
+    let loopLimit = 0;
+    const maxLoops = 120; 
+
+    while (loopLimit < maxLoops) {
+            const isPaid = transactions.some(t => 
+            t.memberId === selectedMemberId && 
+            t.type === 'WAJIB' && 
+            t.periodMonth === checkMonth && 
+            t.periodYear === checkYear
+        );
+
+        if (!isPaid) {
+            setPeriodMonth(checkMonth);
+            setPeriodYear(checkYear);
+            break;
+        }
+
+        // Move to next month
+        checkMonth++;
+        if (checkMonth > 12) {
+            checkMonth = 1;
+            checkYear++;
+        }
+        loopLimit++;
+    }
+  }, [selectedMemberId, type, transactions]); // transactions dependency is needed to re-calc if data changes
+
   // Set default amounts
   useEffect(() => {
-    if (type === 'POKOK') setAmount('50000');
-    else if (type === 'WAJIB') setAmount('10000');
-    else setAmount('');
-  }, [type]);
+    if (type === 'POKOK') {
+      setAmount('50000');
+      setDuration(1);
+      setIsMultiMonth(false);
+      
+      // Auto-set period to Join Date for POKOK
+      if (selectedMemberId) {
+         const member = members.find(m => m.id === selectedMemberId);
+         if (member) {
+            const joinDate = new Date(member.joinDate);
+            setPeriodMonth(joinDate.getMonth() + 1);
+            setPeriodYear(joinDate.getFullYear());
+         }
+      }
+    } else if (type === 'WAJIB') {
+      setAmount((10000 * duration).toString());
+    } else {
+      setAmount('');
+      setDuration(1);
+      setIsMultiMonth(false);
+    }
+  }, [type, duration, selectedMemberId, members]);
+
+  // Helper to check if a specific month/year is valid (not before join date)
+  const isDateBeforeJoin = (m: number, y: number) => {
+     if (!selectedMemberId) return false;
+     const member = members.find(m => m.id === selectedMemberId);
+     if (!member) return false;
+     
+     const joinDate = new Date(member.joinDate);
+     const targetDate = new Date(y, m - 1, 1);
+     const memberJoinDate = new Date(joinDate.getFullYear(), joinDate.getMonth(), 1);
+     
+     return targetDate < memberJoinDate;
+  };
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -847,48 +942,89 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
     const joinDate = new Date(member.joinDate);
     // Use year and month for comparison (set date to 1 to avoid day mismatch)
     const memberJoinDate = new Date(joinDate.getFullYear(), joinDate.getMonth(), 1);
-    const selectedPeriodDate = new Date(periodYear, periodMonth - 1, 1);
+    
+    // Calculate transactions list
+    const newTransactions = [];
+    let currentMonth = periodMonth;
+    let currentYear = periodYear;
+    
+    const loopDuration = isMultiMonth ? duration : 1;
 
-    if (selectedPeriodDate < memberJoinDate) {
-      alert(`Gagal: Periode pembayaran (${new Date(periodYear, periodMonth - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}) lebih awal dari tanggal bergabung anggota (${joinDate.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}).`);
-      return;
+    for (let i = 0; i < loopDuration; i++) {
+        // Handle year rollover
+        if (currentMonth > 12) {
+            currentMonth = 1;
+            currentYear++;
+        }
+
+        // Validate Join Date for each month
+        const targetDate = new Date(currentYear, currentMonth - 1, 1);
+        if (targetDate < memberJoinDate) {
+             alert(`Gagal: Periode ${new Date(currentYear, currentMonth - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })} sebelum tanggal bergabung.`);
+             return;
+        }
+
+        // Validate if already paid (Wajib Only)
+        if (type === 'WAJIB') {
+            const isPaid = transactions.some(t => 
+                t.memberId === member.id && 
+                t.type === 'WAJIB' && 
+                t.periodMonth === currentMonth && 
+                t.periodYear === currentYear
+            );
+            if (isPaid) {
+                 const mName = new Date(currentYear, currentMonth - 1).toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+                 alert(`Gagal: Periode ${mName} SUDAH LUNAS.`);
+                 return;
+            }
+        }
+        
+        // Validate Pokok
+        if (type === 'POKOK') {
+           const hasPaidPokok = transactions.some(t => 
+              t.memberId === member.id && 
+              t.type === 'POKOK'
+            );
+            if (hasPaidPokok) {
+              alert(`Anggota ${member.fullName} SUDAH LUNAS Simpanan Pokok.`);
+              return;
+            }
+        }
+
+        newTransactions.push({
+             type,
+             amount: type === 'WAJIB' ? 10000 : parseInt(amount),
+             periodMonth: currentMonth,
+             periodYear: currentYear,
+             note: note + (loopDuration > 1 ? ` (Bulan ke-${i+1} dari ${loopDuration})` : ''),
+             memberId: member.id,
+             memberName: member.fullName
+        });
+
+        currentMonth++;
     }
 
-    // Check for existing payments
-    if (type === 'POKOK') {
-      const hasPaidPokok = transactions.some(t => 
-        t.memberId === member.id && 
-        t.type === 'POKOK'
-      );
-      if (hasPaidPokok) {
-        alert(`Anggota ${member.fullName} SUDAH LUNAS Simpanan Pokok. Tidak bisa membayar lagi.`);
-        return;
-      }
+    if (newTransactions.length === 1) {
+        const t = newTransactions[0];
+        onDeposit(t.type, t.amount, t.periodMonth, t.periodYear, note, t.memberId!, t.memberName!);
+    } else {
+        // Confirm total
+        const totalAmount = newTransactions.reduce((sum, t) => sum + t.amount, 0);
+        if (confirm(`Konfirmasi pembayaran untuk ${loopDuration} bulan?\nTotal: ${formatRupiah(totalAmount)}`)) {
+            onMultiDeposit(newTransactions);
+        } else {
+            return;
+        }
     }
-
-    if (type === 'WAJIB') {
-      const hasPaidWajib = transactions.some(t => 
-        t.memberId === member.id && 
-        t.type === 'WAJIB' && 
-        t.periodMonth === periodMonth && 
-        t.periodYear === periodYear
-      );
-      
-      const monthName = new Date(periodYear, periodMonth - 1).toLocaleDateString('id-ID', { month: 'long' });
-      if (hasPaidWajib) {
-        alert(`Anggota ${member.fullName} SUDAH LUNAS Simpanan Wajib untuk periode ${monthName} ${periodYear}.`);
-        return;
-      }
-    }
-
-    onDeposit(type, parseInt(amount), periodMonth, periodYear, note, member.id, member.fullName);
     
     setNote('');
     if (type === 'SUKARELA') setAmount('');
-    // Keep member selected for convenience
+    setDuration(1);
+    setIsMultiMonth(false);
   };
 
   const isFixed = type === 'POKOK' || type === 'WAJIB';
+  const isWajib = type === 'WAJIB';
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
   const months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -939,8 +1075,9 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
 
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Periode Pembayaran</label>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
+              <label className="text-xs text-gray-500 mb-1 block">Bulan Mulai</label>
               <select
                 value={periodMonth}
                 onChange={(e) => setPeriodMonth(parseInt(e.target.value))}
@@ -948,15 +1085,19 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
               >
                 {months.map((m, i) => {
                   const isPaid = paidMonths.includes(i + 1);
+                  const isBeforeJoin = isDateBeforeJoin(i + 1, periodYear);
+                  const isDisabled = (isPaid && type === 'WAJIB') || isBeforeJoin;
+                  
                   return (
-                    <option key={i} value={i + 1} disabled={isPaid && type === 'WAJIB'}>
-                      {m} {isPaid && type === 'WAJIB' ? '(Lunas)' : ''}
+                    <option key={i} value={i + 1} disabled={isDisabled}>
+                      {m} {isPaid && type === 'WAJIB' ? '(Lunas)' : ''} {isBeforeJoin ? '(Belum Bergabung)' : ''}
                     </option>
                   );
                 })}
               </select>
             </div>
             <div>
+              <label className="text-xs text-gray-500 mb-1 block">Tahun</label>
               <select
                 value={periodYear}
                 onChange={(e) => setPeriodYear(parseInt(e.target.value))}
@@ -967,6 +1108,47 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
                 ))}
               </select>
             </div>
+             {/* Duration Input - Only for WAJIB */}
+             {isWajib && (
+                <div className="md:col-span-3">
+                  <div className="flex items-center mb-3">
+                    <input
+                      id="multi-month"
+                      type="checkbox"
+                      checked={isMultiMonth}
+                      onChange={(e) => setIsMultiMonth(e.target.checked)}
+                      className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label htmlFor="multi-month" className="ml-2 text-sm font-medium text-gray-700">
+                      Bayar Lebih dari 1 Bulan
+                    </label>
+                  </div>
+                  
+                  {isMultiMonth && (
+                    <div className="bg-gray-50 p-4 rounded-lg border border-gray-200 animate-in fade-in slide-in-from-top-2 duration-200">
+                      <label className="text-xs text-gray-500 mb-1 block">Lama (Bulan)</label>
+                      <input
+                        type="number"
+                        min="2"
+                        max="24"
+                        value={duration}
+                        onChange={(e) => setDuration(parseInt(e.target.value) || 2)}
+                        className="w-full px-4 py-3 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white mb-2"
+                      />
+                      <div className="text-sm text-blue-600">
+                        Membayar untuk: <strong>{duration} bulan</strong><br/>
+                        Dari: {months[periodMonth-1]} {periodYear}<br/>
+                        Sampai: {(() => {
+                            let m = periodMonth + duration - 1;
+                            let y = periodYear;
+                            while (m > 12) { m -= 12; y++; }
+                            return `${months[m-1]} ${y}`;
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </div>
+             )}
           </div>
         </div>
 
@@ -989,6 +1171,7 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
           {isFixed && (
             <p className="text-xs text-gray-500 mt-1">
               * Jumlah simpanan {type.toLowerCase()} sudah ditetapkan sebesar {formatRupiah(type === 'POKOK' ? 50000 : 10000)}
+              {isMultiMonth && duration > 1 && ` x ${duration} bulan = ${formatRupiah(10000 * duration)}`}
             </p>
           )}
         </div>
@@ -1027,22 +1210,39 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
 
   const handleExportRekap = () => {
     const data = members.map(m => {
+      // Check if paid Wajib for this period
       const hasPaidWajib = transactions.some(t => 
         t.memberId === m.id && 
         t.type === 'WAJIB' && 
         t.periodMonth === filterMonth && 
         t.periodYear === filterYear
       );
+      
+      // Check if ever paid Pokok
       const hasPaidPokok = transactions.some(t => 
         t.memberId === m.id && 
         t.type === 'POKOK'
       );
 
+      // Calculate Total Saldo
+      const memberTransactions = transactions.filter(t => t.memberId === m.id);
+      const totalSaldo = memberTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+      // Get Paid Months for selected year
+      const paidMonthsIndices = transactions
+        .filter(t => t.memberId === m.id && t.type === 'WAJIB' && t.periodYear === filterYear)
+        .map(t => t.periodMonth)
+        .sort((a, b) => a - b);
+      
+      const paidMonthsList = paidMonthsIndices.map(idx => months[idx - 1]).join(', ');
+
       return {
         'No. Anggota': m.memberNo,
         'Nama Lengkap': m.fullName,
-        'Simpanan Wajib': hasPaidWajib ? 'Lunas' : 'Belum Bayar',
-        'Simpanan Pokok': hasPaidPokok ? 'Lunas' : 'Belum Lunas'
+        'Status Wajib (Bulan Ini)': hasPaidWajib ? 'Lunas' : 'Belum Bayar',
+        'Status Pokok': hasPaidPokok ? 'Lunas' : 'Belum Lunas',
+        'Total Saldo': totalSaldo,
+        [`Bulan Terbayar (${filterYear})`]: paidMonthsList || '-'
       };
     });
 
@@ -1063,7 +1263,7 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
       <div className="mb-6 flex flex-col md:flex-row justify-between items-end gap-4">
         <div className="flex gap-4 items-end">
           <div>
-             <label className="block text-sm font-medium text-gray-700 mb-1">Bulan</label>
+             <label className="block text-sm font-medium text-gray-700 mb-1">Bulan (Filter Status)</label>
              <select
                 value={filterMonth}
                 onChange={(e) => setFilterMonth(parseInt(e.target.value))}
@@ -1105,14 +1305,16 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
             <tr>
               <th className="px-6 py-4">No. Anggota</th>
               <th className="px-6 py-4">Nama Lengkap</th>
-              <th className="px-6 py-4 text-center">Status Simpanan Wajib</th>
-              <th className="px-6 py-4 text-center">Status Simpanan Pokok</th>
+              <th className="px-6 py-4 text-center">Status Wajib ({months[filterMonth - 1]})</th>
+              <th className="px-6 py-4 text-center">Status Pokok</th>
+              <th className="px-6 py-4 text-right">Total Saldo</th>
+              <th className="px-6 py-4">Bulan Terbayar ({filterYear})</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {members.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
                   Belum ada data anggota.
                 </td>
               </tr>
@@ -1131,6 +1333,19 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
                   t.memberId === m.id && 
                   t.type === 'POKOK'
                 );
+
+                // Calculate Total Saldo
+                const memberTransactions = transactions.filter(t => t.memberId === m.id);
+                const totalSaldo = memberTransactions.reduce((sum, t) => sum + t.amount, 0);
+
+                // Get Paid Months for selected year (Wajib Only)
+                const paidMonthsIndices = transactions
+                  .filter(t => t.memberId === m.id && t.type === 'WAJIB' && t.periodYear === filterYear)
+                  .map(t => t.periodMonth)
+                  .sort((a, b) => a - b);
+                
+                // Format list of months
+                const paidMonthsList = paidMonthsIndices.map(idx => months[idx - 1]).join(', ');
 
                 return (
                   <tr key={m.id} className="hover:bg-gray-50 transition-colors">
@@ -1157,6 +1372,12 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
                           Belum Lunas
                         </span>
                       )}
+                    </td>
+                    <td className="px-6 py-4 text-right font-bold text-gray-900">
+                      {formatRupiah(totalSaldo)}
+                    </td>
+                    <td className="px-6 py-4 text-xs text-gray-500 max-w-[200px] truncate" title={paidMonthsList}>
+                      {paidMonthsList || '-'}
                     </td>
                   </tr>
                 );
