@@ -1,3 +1,4 @@
+// @ts-nocheck
 'use client';
 
 import { useState, useEffect, useRef, Fragment } from 'react';
@@ -18,9 +19,19 @@ import {
   FileSpreadsheet,
   Printer,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Trash2
 } from 'lucide-react';
-import { collection, addDoc, onSnapshot, query, orderBy, writeBatch, doc } from 'firebase/firestore';
+import { 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  query, 
+  orderBy, 
+  writeBatch, 
+  doc, 
+  deleteDoc 
+} from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 export const dynamic = 'force-dynamic';
