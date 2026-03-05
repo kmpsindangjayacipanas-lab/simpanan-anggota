@@ -1361,14 +1361,18 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
                 const paidMonthsList = paidMonthsIndices.map(idx => months[idx - 1]).join(', ');
 
                 // Calculate Full Payment History for Expanded View
-                const historyByYear: Record<number, number[]> = {};
+                const historyByYear: Record<number, { month: number, date: string }[]> = {};
                 if (isExpanded) {
                    transactions
                      .filter(t => t.memberId === m.id && t.type === 'WAJIB')
                      .forEach(t => {
                         if (!historyByYear[t.periodYear]) historyByYear[t.periodYear] = [];
-                        if (!historyByYear[t.periodYear].includes(t.periodMonth)) {
-                            historyByYear[t.periodYear].push(t.periodMonth);
+                        // Check if month already exists to avoid duplicates (though rare)
+                        if (!historyByYear[t.periodYear].some(item => item.month === t.periodMonth)) {
+                            historyByYear[t.periodYear].push({
+                              month: t.periodMonth,
+                              date: t.date
+                            });
                         }
                      });
                 }
@@ -1428,21 +1432,25 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
                                       .sort((a, b) => Number(b) - Number(a))
                                       .map((yearStr) => {
                                         const year = Number(yearStr);
-                                        const paidMonths = historyByYear[year].sort((a, b) => a - b);
+                                        const paidMonths = historyByYear[year].sort((a, b) => a.month - b.month);
                                         
                                         return (
                                           <div key={year} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
                                             <div className="text-xs font-bold text-blue-600 mb-2 border-b pb-1 border-gray-100">
                                               Tahun {year}
                                             </div>
-                                            <div className="flex flex-wrap gap-1.5">
-                                              {paidMonths.map(monthIdx => (
-                                                <span 
-                                                  key={monthIdx} 
-                                                  className="inline-flex items-center px-2 py-1 rounded text-[10px] font-medium bg-green-50 text-green-700 border border-green-100"
-                                                >
-                                                  {months[monthIdx - 1]}
-                                                </span>
+                                            <div className="flex flex-col gap-2">
+                                              {paidMonths.map(item => (
+                                                <div key={item.month} className="flex justify-between items-center text-xs">
+                                                  <span className="inline-flex items-center px-2 py-1 rounded font-medium bg-green-50 text-green-700 border border-green-100">
+                                                    {months[item.month - 1]}
+                                                  </span>
+                                                  <span className="text-gray-500 text-[10px]">
+                                                    {new Date(item.date).toLocaleDateString('id-ID', {
+                                                      day: 'numeric', month: 'short', year: 'numeric'
+                                                    })}
+                                                  </span>
+                                                </div>
                                               ))}
                                             </div>
                                           </div>
