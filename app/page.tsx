@@ -1284,10 +1284,116 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
     XLSX.writeFile(wb, `Rekap_Simpanan_Per_31_Desember_${filterYear}.xlsx`);
   };
 
+  const handleDownloadTemplate = () => {
+    const headers = ['No. Anggota', 'Nama Lengkap', 'Tanggal Bergabung', 'Simpanan Pokok', 'Simpanan Wajib'];
+    const sample = ['KOP-001', 'Contoh Nama', '2024-01-01', 50000, 120000];
+    
+    const ws = XLSX.utils.aoa_to_sheet([headers, sample]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Template Import");
+    XLSX.writeFile(wb, "template-rekap-simpanan.xlsx");
+  };
+
   const handleImportRekap = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Implementasi import rekap (jika diperlukan logic khusus, saat ini hanya placeholder)
-    alert("Fitur import rekap belum tersedia. Gunakan menu 'Setor Simpanan' untuk menambah data.");
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = XLSX.read(bstr, { type: 'binary' });
+        const wsname = wb.SheetNames[0];
+        const ws = wb.Sheets[wsname];
+        const jsonData = XLSX.utils.sheet_to_json(ws) as any[];
+
+        const batch = writeBatch(db);
+        let count = 0;
+
+        jsonData.forEach((row: any) => {
+            const memberNo = row['No. Anggota'];
+            const fullName = row['Nama Lengkap'];
+            let memberId = '';
+
+            // 1. Find or Create Member
+            const existingMember = members.find(m => m.memberNo === memberNo);
+            if (existingMember) {
+                memberId = existingMember.id;
+            } else if (memberNo && fullName) {
+                // Create new member reference
+                const newMemberRef = doc(collection(db, 'members'));
+                memberId = newMemberRef.id;
+                
+                let joinDate = new Date().toISOString();
+                if (row['Tanggal Bergabung']) {
+                     const dateVal = row['Tanggal Bergabung'];
+                     if (typeof dateVal === 'number') {
+                         joinDate = new Date((dateVal - (25567 + 2)) * 86400 * 1000).toISOString();
+                     } else {
+                         const parsed = new Date(dateVal);
+                         if (!isNaN(parsed.getTime())) joinDate = parsed.toISOString();
+                     }
+                }
+
+                batch.set(newMemberRef, {
+                    memberNo,
+                    fullName,
+                    joinDate
+                });
+            }
+
+            if (!memberId) return;
+
+            // 2. Process Simpanan Pokok
+            const pokok = row['Simpanan Pokok'];
+            if (pokok && typeof pokok === 'number' && pokok > 0) {
+                // Check if already paid
+                const hasPaidPokok = transactions.some(t => t.memberId === memberId && t.type === 'POKOK');
+                if (!hasPaidPokok) {
+                    const transRef = doc(collection(db, 'transactions'));
+                    batch.set(transRef, {
+                        date: new Date().toISOString(),
+                        type: 'POKOK',
+                        amount: pokok,
+                        periodMonth: 1, // Default to Jan
+                        periodYear: filterYear,
+                        note: `Import Rekap ${filterYear}`,
+                        memberId,
+                        memberName: fullName || existingMember?.fullName
+                    });
+                    count++;
+                }
+            }
+
+            // 3. Process Simpanan Wajib
+            const wajib = row['Simpanan Wajib'];
+            if (wajib && typeof wajib === 'number' && wajib > 0) {
+                 // For Wajib, we just add it as a lump sum transaction for the year
+                 const transRef = doc(collection(db, 'transactions'));
+                 batch.set(transRef, {
+                        date: new Date().toISOString(),
+                        type: 'WAJIB',
+                        amount: wajib,
+                        periodMonth: 12, // End of year marker
+                        periodYear: filterYear,
+                        note: `Import Rekap (Lump Sum) ${filterYear}`,
+                        memberId,
+                        memberName: fullName || existingMember?.fullName
+                 });
+                 count++;
+            }
+        });
+
+        await batch.commit();
+        alert(`Berhasil memproses import data!`);
+        if (fileInputRef.current) fileInputRef.current.value = '';
+
+      } catch (error) {
+        console.error("Error importing rekap:", error);
+        alert("Gagal mengimpor file.");
+      }
+    };
+    reader.readAsBinaryString(file);
   };
 
   return (
@@ -1309,6 +1415,27 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
         </div>
         
         <div className="flex gap-2">
+            <button 
+              onClick={() => fileInputRef.current?.click()}
+              className="flex items-center justify-center bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Import Excel
+            </button>
+            <input 
+              type="file" 
+              ref={fileInputRef} 
+              onChange={handleImportRekap} 
+              accept=".xlsx, .xls" 
+              className="hidden" 
+            />
+            <button 
+              onClick={handleDownloadTemplate}
+              className="flex items-center justify-center bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+            >
+              <FileSpreadsheet className="w-4 h-4 mr-2" />
+              Template
+            </button>
            <button 
               onClick={handleExportRekap}
               className="flex items-center justify-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
