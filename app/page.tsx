@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
 import { cn, formatRupiah } from '@/lib/utils';
 import * as XLSX from 'xlsx';
 import { 
@@ -16,7 +16,9 @@ import {
   Download,
   Upload,
   FileSpreadsheet,
-  Printer
+  Printer,
+  ChevronDown,
+  ChevronRight
 } from 'lucide-react';
 import { collection, addDoc, onSnapshot, query, orderBy, writeBatch, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
@@ -1201,6 +1203,7 @@ function DepositForm({ onDeposit, onMultiDeposit, members, transactions }: { onD
 function RekapView({ members, transactions }: { members: Member[], transactions: Transaction[] }) {
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
   const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+  const [expandedMembers, setExpandedMembers] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const months = [
@@ -1208,6 +1211,13 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
     'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
   ];
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
+
+  const toggleExpand = (id: string) => {
+    setExpandedMembers(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
 
   const handleExportRekap = () => {
     const data = members.map(m => {
@@ -1304,6 +1314,7 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
         <table className="w-full text-left text-sm text-gray-600">
           <thead className="bg-gray-50 text-gray-900 font-medium border-b border-gray-100">
             <tr>
+              <th className="w-10 px-6 py-4"></th>
               <th className="px-6 py-4">No. Anggota</th>
               <th className="px-6 py-4">Nama Lengkap</th>
               <th className="px-6 py-4 text-center">Status Wajib ({months[filterMonth - 1]})</th>
@@ -1315,12 +1326,14 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
           <tbody className="divide-y divide-gray-100">
             {members.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                <td colSpan={7} className="px-6 py-8 text-center text-gray-500">
                   Belum ada data anggota.
                 </td>
               </tr>
             ) : (
               members.map((m) => {
+                const isExpanded = expandedMembers[m.id];
+                
                 // Check if paid Wajib for this period
                 const hasPaidWajib = transactions.some(t => 
                   t.memberId === m.id && 
@@ -1339,48 +1352,113 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
                 const memberTransactions = transactions.filter(t => t.memberId === m.id);
                 const totalSaldo = memberTransactions.reduce((sum, t) => sum + t.amount, 0);
 
-                // Get Paid Months for selected year (Wajib Only)
+                // Get Paid Months for selected year (Wajib Only) for summary column
                 const paidMonthsIndices = transactions
                   .filter(t => t.memberId === m.id && t.type === 'WAJIB' && t.periodYear === filterYear)
                   .map(t => t.periodMonth)
                   .sort((a, b) => a - b);
                 
-                // Format list of months
                 const paidMonthsList = paidMonthsIndices.map(idx => months[idx - 1]).join(', ');
 
+                // Calculate Full Payment History for Expanded View
+                const historyByYear: Record<number, number[]> = {};
+                if (isExpanded) {
+                   transactions
+                     .filter(t => t.memberId === m.id && t.type === 'WAJIB')
+                     .forEach(t => {
+                        if (!historyByYear[t.periodYear]) historyByYear[t.periodYear] = [];
+                        if (!historyByYear[t.periodYear].includes(t.periodMonth)) {
+                            historyByYear[t.periodYear].push(t.periodMonth);
+                        }
+                     });
+                }
+
                 return (
-                  <tr key={m.id} className="hover:bg-gray-50 transition-colors">
-                    <td className="px-6 py-4 font-medium text-gray-900">{m.memberNo}</td>
-                    <td className="px-6 py-4">{m.fullName}</td>
-                    <td className="px-6 py-4 text-center">
-                      {hasPaidWajib ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Lunas
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                          Belum Bayar
-                        </span>
-                      )}
-                    </td>
-                     <td className="px-6 py-4 text-center">
-                      {hasPaidPokok ? (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                          Lunas
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
-                          Belum Lunas
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-6 py-4 text-right font-bold text-gray-900">
-                      {formatRupiah(totalSaldo)}
-                    </td>
-                    <td className="px-6 py-4 text-xs text-gray-500 max-w-[200px] truncate" title={paidMonthsList}>
-                      {paidMonthsList || '-'}
-                    </td>
-                  </tr>
+                  <Fragment key={m.id}>
+                    <tr 
+                      className={cn("hover:bg-gray-50 transition-colors cursor-pointer", isExpanded && "bg-blue-50/50")}
+                      onClick={() => toggleExpand(m.id)}
+                    >
+                      <td className="px-6 py-4 text-center">
+                        {isExpanded ? <ChevronDown className="w-4 h-4 text-blue-600" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+                      </td>
+                      <td className="px-6 py-4 font-medium text-gray-900">{m.memberNo}</td>
+                      <td className="px-6 py-4">{m.fullName}</td>
+                      <td className="px-6 py-4 text-center">
+                        {hasPaidWajib ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Lunas
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                            Belum Bayar
+                          </span>
+                        )}
+                      </td>
+                       <td className="px-6 py-4 text-center">
+                        {hasPaidPokok ? (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Lunas
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                            Belum Lunas
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-right font-bold text-gray-900">
+                        {formatRupiah(totalSaldo)}
+                      </td>
+                      <td className="px-6 py-4 text-xs text-gray-500 max-w-[200px] truncate" title={paidMonthsList}>
+                        {paidMonthsList || '-'}
+                      </td>
+                    </tr>
+                    {isExpanded && (
+                      <tr className="bg-gray-50 animate-in fade-in slide-in-from-top-1 duration-200">
+                        <td colSpan={7} className="px-6 py-4 border-b border-gray-100">
+                           <div className="pl-10">
+                              <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center">
+                                <History className="w-4 h-4 mr-2" />
+                                Riwayat Pelunasan Simpanan Wajib
+                              </h4>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                {Object.keys(historyByYear).length > 0 ? (
+                                    Object.keys(historyByYear)
+                                      .sort((a, b) => Number(b) - Number(a))
+                                      .map((yearStr) => {
+                                        const year = Number(yearStr);
+                                        const paidMonths = historyByYear[year].sort((a, b) => a - b);
+                                        
+                                        return (
+                                          <div key={year} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm">
+                                            <div className="text-xs font-bold text-blue-600 mb-2 border-b pb-1 border-gray-100">
+                                              Tahun {year}
+                                            </div>
+                                            <div className="flex flex-wrap gap-1.5">
+                                              {paidMonths.map(monthIdx => (
+                                                <span 
+                                                  key={monthIdx} 
+                                                  className="inline-flex items-center px-2 py-1 rounded text-[10px] font-medium bg-green-50 text-green-700 border border-green-100"
+                                                >
+                                                  {months[monthIdx - 1]}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        );
+                                      })
+                                ) : (
+                                   <div className="col-span-3 text-sm text-gray-500 italic py-2">
+                                      Belum ada riwayat pembayaran simpanan wajib.
+                                   </div>
+                                )}
+                              </div>
+                           </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 );
               })
             )}
