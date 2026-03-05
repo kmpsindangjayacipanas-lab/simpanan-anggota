@@ -1220,47 +1220,68 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
   };
 
   const handleExportRekap = () => {
-    const data = members.map(m => {
-      // Check if paid Wajib for this period
-      const hasPaidWajib = transactions.some(t => 
-        t.memberId === m.id && 
-        t.type === 'WAJIB' && 
-        t.periodMonth === filterMonth && 
-        t.periodYear === filterYear
-      );
-      
-      // Check if ever paid Pokok
-      const hasPaidPokok = transactions.some(t => 
-        t.memberId === m.id && 
-        t.type === 'POKOK'
-      );
+    // 1. Siapkan Header (Baris 1 & 2)
+    const header1 = [
+        "NOMOR", "", "NAMA", "MASUK JADI", "SIMPANAN", "", ""
+    ];
+    const header2 = [
+        "URUT", "ANGGOTA", "", "ANGGOTA", "POKOK", "WAJIB", "JUMLAH"
+    ];
 
-      // Calculate Total Saldo
-      const memberTransactions = transactions.filter(t => t.memberId === m.id);
-      const totalSaldo = memberTransactions.reduce((sum, t) => sum + t.amount, 0);
+    // 2. Siapkan Data Body
+    const bodyData = members.map((m, index) => {
+        // Calculate Totals per Member
+        const memberTransactions = transactions.filter(t => t.memberId === m.id);
+        const totalPokok = memberTransactions
+            .filter(t => t.type === 'POKOK')
+            .reduce((sum, t) => sum + t.amount, 0);
+        const totalWajib = memberTransactions
+            .filter(t => t.type === 'WAJIB')
+            .reduce((sum, t) => sum + t.amount, 0);
+        const totalJumlah = totalPokok + totalWajib;
 
-      // Get Paid Months for selected year
-      const paidMonthsIndices = transactions
-        .filter(t => t.memberId === m.id && t.type === 'WAJIB' && t.periodYear === filterYear)
-        .map(t => t.periodMonth)
-        .sort((a, b) => a - b);
-      
-      const paidMonthsList = paidMonthsIndices.map(idx => months[idx - 1]).join(', ');
-
-      return {
-        'No. Anggota': m.memberNo,
-        'Nama Lengkap': m.fullName,
-        'Status Wajib (Bulan Ini)': hasPaidWajib ? 'Lunas' : 'Belum Bayar',
-        'Status Pokok': hasPaidPokok ? 'Lunas' : 'Belum Lunas',
-        'Total Saldo': totalSaldo,
-        [`Bulan Terbayar (${filterYear})`]: paidMonthsList || '-'
-      };
+        return [
+            index + 1,                                  // URUT
+            m.memberNo,                                 // ANGGOTA
+            m.fullName,                                 // NAMA
+            new Date(m.joinDate).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }), // MASUK JADI ANGGOTA
+            totalPokok,                                 // POKOK
+            totalWajib,                                 // WAJIB
+            totalJumlah                                 // JUMLAH
+        ];
     });
 
-    const ws = XLSX.utils.json_to_sheet(data);
+    // 3. Gabungkan Semua
+    const finalData = [header1, header2, ...bodyData];
+
+    // 4. Buat Worksheet
+    const ws = XLSX.utils.aoa_to_sheet(finalData);
+
+    // 5. Atur Merging Cells (Penggabungan Sel Header)
+    ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }, // NOMOR (A1:B1) -> Tapi di excel sebenarnya A1:B1, cuma labelnya "NOMOR" di A1
+        // Revisi merging agar sesuai gambar:
+        // NOMOR (A1:B1) -> Salah, harusnya NOMOR di atas URUT & ANGGOTA
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }, // NOMOR spans 2 cols
+        { s: { r: 0, c: 2 }, e: { r: 1, c: 2 } }, // NAMA spans 2 rows
+        { s: { r: 0, c: 3 }, e: { r: 1, c: 3 } }, // MASUK JADI ANGGOTA spans 2 rows
+        { s: { r: 0, c: 4 }, e: { r: 0, c: 6 } }, // SIMPANAN spans 3 cols (POKOK, WAJIB, JUMLAH)
+    ];
+    
+    // Set column widths
+    ws['!cols'] = [
+        { wch: 8 },  // URUT
+        { wch: 15 }, // NO ANGGOTA
+        { wch: 30 }, // NAMA
+        { wch: 20 }, // TANGGAL
+        { wch: 15 }, // POKOK
+        { wch: 15 }, // WAJIB
+        { wch: 15 }  // JUMLAH
+    ];
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Rekap Pembayaran");
-    XLSX.writeFile(wb, `Rekap_Pembayaran_${months[filterMonth-1]}_${filterYear}.xlsx`);
+    XLSX.utils.book_append_sheet(wb, ws, "Rekap Simpanan");
+    XLSX.writeFile(wb, `Rekap_Simpanan_Per_31_Desember_${filterYear}.xlsx`);
   };
 
   const handleImportRekap = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1274,19 +1295,7 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
       <div className="mb-6 flex flex-col md:flex-row justify-between items-end gap-4">
         <div className="flex gap-4 items-end">
           <div>
-             <label className="block text-sm font-medium text-gray-700 mb-1">Bulan (Filter Status)</label>
-             <select
-                value={filterMonth}
-                onChange={(e) => setFilterMonth(parseInt(e.target.value))}
-                className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
-              >
-                {months.map((m, i) => (
-                  <option key={i} value={i + 1}>{m}</option>
-                ))}
-              </select>
-          </div>
-          <div>
-             <label className="block text-sm font-medium text-gray-700 mb-1">Tahun</label>
+             <label className="block text-sm font-medium text-gray-700 mb-1">Tahun Laporan</label>
              <select
                 value={filterYear}
                 onChange={(e) => setFilterYear(parseInt(e.target.value))}
@@ -1305,7 +1314,7 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
               className="flex items-center justify-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
               <Download className="w-4 h-4 mr-2" />
-              Export Rekap
+              Export Rekap Excel
             </button>
         </div>
       </div>
