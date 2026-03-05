@@ -1370,34 +1370,34 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
             if (wajib && typeof wajib === 'number' && wajib > 0) {
                  // Automatically generate monthly transactions based on amount
                  const monthlyAmount = 10000;
-                 // Calculate how many months this amount covers
                  const monthsCount = Math.floor(wajib / monthlyAmount);
                  
-                 // If not a multiple of 10000, we might have an issue, but let's just loop
-                 // Start from January (1) or just append? 
-                 // For "Rekap", it usually implies full payment for the year up to some point.
-                 // Let's assume it starts from Month 1 (January).
-                 
                  for (let i = 1; i <= monthsCount; i++) {
-                     if (i > 12) break; // Cap at 12 months for the selected year
+                     if (i > 12) break; // Cap at 12 months
 
-                     // Create transaction for each month
-                     const transRef = doc(collection(db, 'transactions'));
-                     batch.set(transRef, {
-                        date: new Date().toISOString(), // Use current time
-                        type: 'WAJIB',
-                        amount: monthlyAmount,
-                        periodMonth: i,
-                        periodYear: filterYear,
-                        note: `Import Rekap ${filterYear} (Bulan ${i})`,
-                        memberId,
-                        memberName: fullName || existingMember?.fullName
-                     });
-                     count++;
+                     // Check if already paid for this specific period
+                     const isAlreadyPaid = transactions.some(t => 
+                        t.memberId === memberId && 
+                        t.type === 'WAJIB' && 
+                        t.periodMonth === i && 
+                        t.periodYear === filterYear
+                     );
+
+                     if (!isAlreadyPaid) {
+                        const transRef = doc(collection(db, 'transactions'));
+                        batch.set(transRef, {
+                            date: new Date().toISOString(),
+                            type: 'WAJIB',
+                            amount: monthlyAmount,
+                            periodMonth: i,
+                            periodYear: filterYear,
+                            note: `Import Rekap ${filterYear} (Bulan ${i})`,
+                            memberId,
+                            memberName: fullName || existingMember?.fullName
+                        });
+                        count++;
+                     }
                  }
-                 
-                 // If there's a remainder (e.g. 5000), it's ignored or should be Sukarela? 
-                 // For now, ignore remainder as Wajib is fixed.
             }
         });
 
