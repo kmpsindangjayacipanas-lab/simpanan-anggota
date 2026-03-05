@@ -1017,6 +1017,7 @@ function DepositForm({ onDeposit, members, transactions }: { onDeposit: (type: T
 function RekapView({ members, transactions }: { members: Member[], transactions: Transaction[] }) {
   const [filterMonth, setFilterMonth] = useState(new Date().getMonth() + 1);
   const [filterYear, setFilterYear] = useState(new Date().getFullYear());
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const months = [
     'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
@@ -1024,32 +1025,77 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
   ];
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
+  const handleExportRekap = () => {
+    const data = members.map(m => {
+      const hasPaidWajib = transactions.some(t => 
+        t.memberId === m.id && 
+        t.type === 'WAJIB' && 
+        t.periodMonth === filterMonth && 
+        t.periodYear === filterYear
+      );
+      const hasPaidPokok = transactions.some(t => 
+        t.memberId === m.id && 
+        t.type === 'POKOK'
+      );
+
+      return {
+        'No. Anggota': m.memberNo,
+        'Nama Lengkap': m.fullName,
+        'Simpanan Wajib': hasPaidWajib ? 'Lunas' : 'Belum Bayar',
+        'Simpanan Pokok': hasPaidPokok ? 'Lunas' : 'Belum Lunas'
+      };
+    });
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Rekap Pembayaran");
+    XLSX.writeFile(wb, `Rekap_Pembayaran_${months[filterMonth-1]}_${filterYear}.xlsx`);
+  };
+
+  const handleImportRekap = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Implementasi import rekap (jika diperlukan logic khusus, saat ini hanya placeholder)
+    alert("Fitur import rekap belum tersedia. Gunakan menu 'Setor Simpanan' untuk menambah data.");
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   return (
     <Card>
-      <div className="mb-6 flex gap-4 items-end">
-        <div>
-           <label className="block text-sm font-medium text-gray-700 mb-1">Bulan</label>
-           <select
-              value={filterMonth}
-              onChange={(e) => setFilterMonth(parseInt(e.target.value))}
-              className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
-            >
-              {months.map((m, i) => (
-                <option key={i} value={i + 1}>{m}</option>
-              ))}
-            </select>
+      <div className="mb-6 flex flex-col md:flex-row justify-between items-end gap-4">
+        <div className="flex gap-4 items-end">
+          <div>
+             <label className="block text-sm font-medium text-gray-700 mb-1">Bulan</label>
+             <select
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(parseInt(e.target.value))}
+                className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                {months.map((m, i) => (
+                  <option key={i} value={i + 1}>{m}</option>
+                ))}
+              </select>
+          </div>
+          <div>
+             <label className="block text-sm font-medium text-gray-700 mb-1">Tahun</label>
+             <select
+                value={filterYear}
+                onChange={(e) => setFilterYear(parseInt(e.target.value))}
+                className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
+              >
+                {years.map((y) => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+          </div>
         </div>
-        <div>
-           <label className="block text-sm font-medium text-gray-700 mb-1">Tahun</label>
-           <select
-              value={filterYear}
-              onChange={(e) => setFilterYear(parseInt(e.target.value))}
-              className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-blue-500 outline-none"
+        
+        <div className="flex gap-2">
+           <button 
+              onClick={handleExportRekap}
+              className="flex items-center justify-center bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
             >
-              {years.map((y) => (
-                <option key={y} value={y}>{y}</option>
-              ))}
-            </select>
+              <Download className="w-4 h-4 mr-2" />
+              Export Rekap
+            </button>
         </div>
       </div>
 
