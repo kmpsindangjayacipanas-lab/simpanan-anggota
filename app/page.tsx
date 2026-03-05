@@ -1396,13 +1396,7 @@ function RekapView({ members, transactions }: { members: Member[], transactions:
                     </tr>
                     {isExpanded && (
                       <tr className="bg-gray-50 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <td colSpan={8} className="px-6 py-4 border-b border-gray-100"> py-4 text-xs text-gray-500 max-w-[200px] truncate" title={paidMonthsList}>
-                        {paidMonthsList || '-'}
-                      </td>
-                    </tr>
-                    {isExpanded && (
-                      <tr className="bg-gray-50 animate-in fade-in slide-in-from-top-1 duration-200">
-                        <td colSpan={7} className="px-6 py-4 border-b border-gray-100">
+                        <td colSpan={8} className="px-6 py-4 border-b border-gray-100">
                            <div className="pl-10">
                               <h4 className="text-sm font-bold text-gray-800 mb-3 flex items-center">
                                 <History className="w-4 h-4 mr-2" />
