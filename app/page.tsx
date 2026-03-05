@@ -370,6 +370,18 @@ export default function Home() {
     }
   };
 
+  const handleDeleteTransaction = async (id: string) => {
+    if (confirm("Apakah Anda yakin ingin menghapus transaksi ini?")) {
+      try {
+        await deleteDoc(doc(db, 'transactions', id));
+        alert("Transaksi berhasil dihapus.");
+      } catch (error) {
+        console.error("Error deleting transaction: ", error);
+        alert("Gagal menghapus transaksi.");
+      }
+    }
+  };
+
   if (!isLoaded) return <div className="flex h-screen items-center justify-center">Loading...</div>;
 
   const totalBalance = data.pokok + data.wajib + data.sukarela;
@@ -582,13 +594,22 @@ export default function Home() {
                                   + {formatRupiah(t.amount)}
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                  <button
-                                    onClick={() => handlePrintReceipt(t)}
-                                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                                    title="Cetak Kuitansi"
-                                  >
-                                    <Printer className="w-4 h-4" />
-                                  </button>
+                                  <div className="flex justify-center gap-2">
+                                      <button
+                                        onClick={() => handlePrintReceipt(t)}
+                                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                                        title="Cetak Kuitansi"
+                                      >
+                                        <Printer className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteTransaction(t.id)}
+                                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                                        title="Hapus Transaksi"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))
@@ -679,13 +700,22 @@ export default function Home() {
                                   + {formatRupiah(t.amount)}
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                  <button
-                                    onClick={() => handlePrintReceipt(t)}
-                                    className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
-                                    title="Cetak Kuitansi"
-                                  >
-                                    <Printer className="w-4 h-4" />
-                                  </button>
+                                  <div className="flex justify-center gap-2">
+                                      <button
+                                        onClick={() => handlePrintReceipt(t)}
+                                        className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                                        title="Cetak Kuitansi"
+                                      >
+                                        <Printer className="w-4 h-4" />
+                                      </button>
+                                      <button
+                                        onClick={() => handleDeleteTransaction(t.id)}
+                                        className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-full transition-colors"
+                                        title="Hapus Transaksi"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                      </button>
+                                  </div>
                                 </td>
                               </tr>
                             ))
